@@ -83,15 +83,15 @@ case "$LD_STATUS" in
 Optimal)
     ;;
 Rebuild*|Rebuilding*)
-    echo "WARNING - RAID rebuilding | failed_disks=${FAILED_DISKS:-0}"
+    echo "WARNING - RAID rebuilding - failed_disks=${FAILED_DISKS:-0}"
     exit $STATE_WARNING
     ;;
 Degraded*|Failed*)
-    echo "CRITICAL - RAID $LD_STATUS | failed_disks=${FAILED_DISKS:-0}"
+    echo "CRITICAL - RAID $LD_STATUS - failed_disks=${FAILED_DISKS:-0}"
     exit $STATE_CRITICAL
     ;;
 *)
-    echo "CRITICAL - RAID state $LD_STATUS | failed_disks=${FAILED_DISKS:-0}"
+    echo "CRITICAL - RAID state $LD_STATUS - failed_disks=${FAILED_DISKS:-0}"
     exit $STATE_CRITICAL
     ;;
 esac
@@ -110,7 +110,7 @@ esac
 ############################################
 
 if [ -n "$PARITY_DISKS" ] || [ -n "$HW_DISKS" ] || [ -n "$MEDIUM_DISKS" ]; then
-    echo "WARNING - RAID Optimal but errors detected | parity: ${PARITY_DISKS:-none} hw: ${HW_DISKS:-none} medium: ${MEDIUM_DISKS:-none}"
+    echo "WARNING - RAID Optimal but errors detected - parity: ${PARITY_DISKS:-none} hw: ${HW_DISKS:-none} medium: ${MEDIUM_DISKS:-none}"
     exit $STATE_WARNING
 fi
 
@@ -118,5 +118,5 @@ fi
 # All good
 ############################################
 
-echo "OK - RAID Optimal | errors=0"
+echo "OK - RAID Optimal - errors=0"
 exit $STATE_OK
