@@ -26,22 +26,23 @@ fi
 # Get RAID logical device status
 ############################################
 
-LD_STATUS=$(sudo $ARCCONF GETCONFIG $CONTROLLER LD \
-| awk -F: '/Status of Logical Device/ {gsub(/^ +/,"",$2); print $2}' \
-| sort -u)
+LD_INFO=$(sudo $ARCCONF GETCONFIG $CONTROLLER LD)
+
+LD_STATUS=$(echo "$LD_INFO" \
+| awk -F: '/Status of Logical Device/ {gsub(/^ +| +$/,"",$2); print $2}' \
+| head -n1)
 
 ############################################
 # Get failed physical disks
 ############################################
 
-FAILED_DISKS=$(sudo $ARCCONF GETCONFIG $CONTROLLER PD | awk '
-/^Device #[0-9]+/ {
-    dev=$3
-}
-/^[[:space:]]+State[[:space:]]*:/ {
-    state=$3
-    if (dev != "" && state !~ /^(Online|Hot Spare|Ready)$/) {
-        print "Disk#"dev"("state")"
+FAILED_DISKS=$(echo "$LD_INFO" | awk '
+/Segment/ && /Missing/ {
+    match($0, /Device:([0-9]+)/, d)
+    if (d[1] != "") {
+        print "Disk#" d[1] "(Missing)"
+    } else {
+        print "MissingDisk"
     }
 }
 ' | paste -sd "," -)
@@ -77,12 +78,13 @@ MEDIUM_DISKS=$(get_disk_errors mediumErrors)
 
 check_threshold() {
     local DATA="$1"
-    local TYPE="$2"
     local ALERTS=""
+
+    [ -z "$DATA" ] && { echo ""; return; }
 
     IFS=',' read -ra ITEMS <<< "$DATA"
     for item in "${ITEMS[@]}"; do
-        ERR=$(echo "$item" | awk -F'errors=' '{print $2}')
+        ERR=${item##*errors=}
         if [ -n "$ERR" ] && [ "$ERR" -gt "$THRESHOLD" ]; then
             ALERTS+="$item,"
         fi
@@ -110,19 +112,28 @@ MEDIUM_ALERT=$(check_threshold "$MEDIUM_DISKS")
 # RAID state logic
 ############################################
 
+REBUILD_PCT=$(echo "$LD_INFO" \
+    | grep -oE 'Rebuild *: *[0-9]+' \
+    | grep -oE '[0-9]+' \
+    | head -n1)
+
 case "$LD_STATUS" in
 Optimal)
     ;;
-Rebuild*|Rebuilding*)
-    echo "WARNING - RAID rebuilding - failed_disks=${FAILED_DISKS:-0}"
+*Rebuild*|*Rebuilding*)
+    if [ -n "$REBUILD_PCT" ]; then
+        echo "WARNING - RAID rebuilding (${REBUILD_PCT}%) - failed_disks=${FAILED_DISKS:-none}"
+    else
+        echo "WARNING - RAID rebuilding - failed_disks=${FAILED_DISKS:-none}"
+    fi
     exit $STATE_WARNING
     ;;
-Degraded*|Failed*)
-    echo "CRITICAL - RAID $LD_STATUS - failed_disks=${FAILED_DISKS:-0}"
+*Degraded*|*Failed*)
+    echo "CRITICAL - RAID $LD_STATUS - failed_disks=${FAILED_DISKS:-none}"
     exit $STATE_CRITICAL
     ;;
 *)
-    echo "CRITICAL - RAID state $LD_STATUS - failed_disks=${FAILED_DISKS:-0}"
+    echo "CRITICAL - RAID state $LD_STATUS - failed_disks=${FAILED_DISKS:-none}"
     exit $STATE_CRITICAL
     ;;
 esac
