@@ -34,14 +34,17 @@ LD_STATUS=$(sudo $ARCCONF GETCONFIG $CONTROLLER LD \
 # Get failed physical disks
 ############################################
 
-FAILED_DISKS=$(sudo $ARCCONF GETCONFIG $CONTROLLER PD \
-| awk '
-/Device #/ {dev=$3}
-/State/ {
-state=$2
-if (state!="Online" && state!="Hot" && state!="Ready")
-print "Disk#"dev"("state")"
-}' | paste -sd "," -)
+FAILED_DISKS=$(sudo $ARCCONF GETCONFIG $CONTROLLER PD | awk '
+/^Device #[0-9]+/ {
+    dev=$3
+}
+/^[[:space:]]+State[[:space:]]*:/ {
+    state=$3
+    if (dev != "" && state !~ /^(Online|Hot Spare|Ready)$/) {
+        print "Disk#"dev"("state")"
+    }
+}
+' | paste -sd "," -)
 
 ############################################
 # Get disk error logs
