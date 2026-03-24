@@ -8,6 +8,8 @@ STATE_WARNING=1
 STATE_CRITICAL=2
 STATE_UNKNOWN=3
 
+THRESHOLD=70
+
 # Check arcconf binary
 if [ ! -x "$ARCCONF" ]; then
     echo "UNKNOWN - arcconf not found"
@@ -65,6 +67,32 @@ PARITY_DISKS=$(get_disk_errors numParityErrors)
 HW_DISKS=$(get_disk_errors hwErrors)
 MEDIUM_DISKS=$(get_disk_errors mediumErrors)
 
+
+############################################
+# Disk error counters with threshold logic
+############################################
+
+check_threshold() {
+    local DATA="$1"
+    local TYPE="$2"
+    local ALERTS=""
+
+    IFS=',' read -ra ITEMS <<< "$DATA"
+    for item in "${ITEMS[@]}"; do
+        ERR=$(echo "$item" | awk -F'errors=' '{print $2}')
+        if [ -n "$ERR" ] && [ "$ERR" -gt "$THRESHOLD" ]; then
+            ALERTS+="$item,"
+        fi
+    done
+
+    echo "${ALERTS%,}"
+}
+
+PARITY_ALERT=$(check_threshold "$PARITY_DISKS")
+HW_ALERT=$(check_threshold "$HW_DISKS")
+MEDIUM_ALERT=$(check_threshold "$MEDIUM_DISKS")
+
+
 ############################################
 # SMART failure detection
 ############################################
@@ -109,14 +137,15 @@ esac
 # Disk error counters
 ############################################
 
-if [ -n "$PARITY_DISKS" ] || [ -n "$HW_DISKS" ] || [ -n "$MEDIUM_DISKS" ]; then
-    echo "WARNING - RAID Optimal but errors detected - parity: ${PARITY_DISKS:-none} hw: ${HW_DISKS:-none} medium: ${MEDIUM_DISKS:-none}"
+# If any disk exceeds threshold → WARNING
+if [ -n "$PARITY_ALERT" ] || [ -n "$HW_ALERT" ] || [ -n "$MEDIUM_ALERT" ]; then
+    echo "WARNING - RAID Optimal but high errors detected - parity: ${PARITY_DISKS:-none} hw: ${HW_DISKS:-none} medium: ${MEDIUM_DISKS:-none}"
     exit $STATE_WARNING
 fi
 
 ############################################
-# All good
+# All good (but still show existing errors)
 ############################################
 
-echo "OK - RAID Optimal - errors=0"
+echo "OK - RAID Optimal - parity: ${PARITY_DISKS:-none} hw: ${HW_DISKS:-none} medium: ${MEDIUM_DISKS:-none}"
 exit $STATE_OK
